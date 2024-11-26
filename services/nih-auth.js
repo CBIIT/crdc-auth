@@ -1,8 +1,14 @@
 const nodeFetch = require("node-fetch");
-const config = require("../config");
+const configuration = require("../config");
 const {LOGIN_GOV, NIH} = require("../constants/idp-constants");
+const {DatabaseConnector} = require("../crdc-datahub-database-drivers/database-connector");
 const loginGovRegex = new RegExp(/(?:.){1}(@login.gov){1}\b/i);
 const nihRegex = new RegExp(/(?:.){1}(@nih.gov){1}\b/i);
+const dbConnector = new DatabaseConnector(configuration.mongo_db_connection_string);
+let config;
+dbConnector.connect().then(async () => {
+    config = await configuration.updateConfig(dbConnector);
+});
 
 const validateResponseOrThrow= (res)=> {
     if (res.status != 200) throw new Error("NIH access token failed to create because of invalid access code or unauthorized access");

@@ -7,7 +7,9 @@ const fs = require('fs');
 const cors = require('cors');
 const config = require('./config');
 const cookieParser = require('cookie-parser');
-
+const {MongoDBCollection} = require("./crdc-datahub-database-drivers/mongodb-collection");
+const {DATABASE_NAME, LOG_COLLECTION, USER_COLLECTION, CONFIGURATION_COLLECTION} = require("./crdc-datahub-database-drivers/database-constants");
+const {DatabaseConnector} = require("./crdc-datahub-database-drivers/database-connector");
 console.log(config);
 
 const LOG_FOLDER = 'logs';
@@ -40,11 +42,20 @@ if (process.env.NODE_ENV === 'development') {
   console.log("Running in development mode, local test page enabled");
   app.set('view engine', 'ejs');
 
+  let nihConf;
+  const dbConnector = new DatabaseConnector(config.mongo_db_connection_string);
+  dbConnector.connect().then(async () => {
+    const configurationCollection = new MongoDBCollection(dbConnector.client, DATABASE_NAME, CONFIGURATION_COLLECTION);
+    const res = await configurationCollection.aggregate([{
+      "$match": { type: "NIH_CONFIGURATION" }
+    }, {"$limit": 1}]);
+    nihConf = (res?.length === 1) ? res[0] : null;
+  });
   app.get('/', (req, res) => {
     res.render('index', {
-      nihClientID: config.nih.CLIENT_ID,
-      nihRedirectURL: config.nih.REDIRECT_URL,
-      noAutoLogin: config.noAutoLogin
+      nihClientID: nihConf?.["NIH_CLIENT_ID"] || process.env.NIH_CLIENT_ID,
+      nihRedirectURL: nihConf?.["REDIRECT_URL"] || process.env.NIH_REDIRECT_URL,
+      noAutoLogin:  config.noAutoLogin
     });
   });
 }

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const idpClient = require('../idps');
-const config = require('../config');
+const configuration = require('../config');
 const {logout} = require('../controllers/auth-api')
 const {DatabaseConnector} = require("../crdc-datahub-database-drivers/database-connector");
 const {MongoDBCollection} = require("../crdc-datahub-database-drivers/mongodb-collection");
@@ -9,20 +9,22 @@ const {DATABASE_NAME, LOG_COLLECTION, USER_COLLECTION} = require("../crdc-datahu
 const {LoginEvent, LogoutEvent} = require("../crdc-datahub-database-drivers/domain/log-events");
 const {User} = require("../crdc-datahub-database-drivers/services/user");
 const {ERROR} = require("../crdc-datahub-database-drivers/constants/error-constants");
-const dbConnector = new DatabaseConnector(config.mongo_db_connection_string);
+const dbConnector = new DatabaseConnector(configuration.mongo_db_connection_string);
 let logCollection;
 let userService;
-dbConnector.connect().then(() => {
+let config;
+dbConnector.connect().then(async () => {
     logCollection = new MongoDBCollection(dbConnector.client, DATABASE_NAME, LOG_COLLECTION);
     const userCollection = new MongoDBCollection(dbConnector.client, DATABASE_NAME, USER_COLLECTION);
     userService = new User(userCollection, logCollection);
+    config = await configuration.updateConfig(dbConnector);
 });
 
 /* Login */
 router.post('/login', async function (req, res) {
     try {
         const reqIDP = config.getIdpOrDefault(req.body['IDP']);
-        const { name, lastName, tokens, email, idp } = await idpClient.login(req.body['code'], reqIDP, config.getUrlOrDefault(reqIDP, req.body['redirectUri']));
+        const { name, lastName, tokens, email, idp } = await idpClient.login(req.body['code'], reqIDP, config.getUrlOrDefault(reqIDP, req.body['redirectUri'], config.nih.REDIRECT_URL));
         if (!await userService.isEmailAndIDPLoginPermitted(email, idp)) {
             throw { statusCode: 403, message: ERROR.INACTIVE_USER };
         }
